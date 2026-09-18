@@ -97,6 +97,13 @@
       "repository": "bloxbean/cardano-client-lib",
       "description": "A Cardano client library in Java.",
       "accent": "#ef4444"
+    },
+    {
+      "slug": "mesmo",
+      "name": "Mesmo",
+      "repository": "bloxbean/mesmo",
+      "description": "Native bindings that bring Cardano Client Lib to non-Java languages.",
+      "accent": "#84cc16"
     }
   ]
 }
