@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Build output
+_site/
+
+# Generated dashboard data (rebuilt by `npm run data:refresh`, see docs/OPERATIONS.md)
+data/projects.json
+
+# macOS
+.DS_Store

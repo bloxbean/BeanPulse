@@ -147,7 +147,7 @@ The site has no runtime dependencies and no compilation step.
 | `scripts/release-data-utils.mjs` | Release detection and status summaries. |
 | `scripts/public-github-preview.mjs` | Reduced public fallback when API access is unavailable. |
 | `scripts/serve.mjs` | Local static preview server. |
-| `data/projects.json` | Generated local snapshot; do not edit by hand. |
+| `data/projects.json` | Generated local snapshot; untracked, rebuilt by `npm run data:refresh`. |
 | `scripts/sync-discovery-issue.mjs` | Maintains the new-repository notification inbox. |
 | `.github/workflows/deploy-pages.yml` | Refresh, validation, and Pages deployment. |
 
