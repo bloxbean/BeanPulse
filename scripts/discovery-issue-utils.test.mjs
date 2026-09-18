@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { discoveryIssueBody, previousRepositories, repositoryChanges } from './discovery-issue-utils.mjs'
+import { DISCOVERY_ISSUE_TITLE, discoveryIssueBody, isDiscoveryIssue, previousRepositories, repositoryChanges } from './discovery-issue-utils.mjs'
 
 const repositories = [
   { repository: 'bloxbean/new-project', name: 'new-project', description: 'A new @team project', url: 'https://github.com/bloxbean/new-project', language: 'Java', archived: false, fork: false, isNew: true, watched: false },
@@ -21,4 +21,18 @@ test('detects repositories added to and removed from discovery', () => {
     added: ['bloxbean/new'],
     removed: ['bloxbean/old'],
   })
+})
+
+test('warns that the discovery inbox is automated before listing repositories', () => {
+  const body = discoveryIssueBody({ organization: 'bloxbean', catalog: repositories }, repositories.filter((repository) => !repository.watched))
+  assert.match(body, /Automated issue/)
+  assert.ok(body.indexOf('Automated issue') < body.indexOf('bloxbean/new-project'), 'the notice must appear above the repository list')
+})
+
+test('recognises a discovery inbox by its marker regardless of title', () => {
+  const body = discoveryIssueBody({ organization: 'bloxbean', catalog: repositories }, repositories.filter((repository) => !repository.watched))
+  assert.ok(isDiscoveryIssue(body))
+  assert.ok(!isDiscoveryIssue('An unrelated issue body'))
+  assert.ok(!isDiscoveryIssue(undefined))
+  assert.match(DISCOVERY_ISSUE_TITLE, /Automated/)
 })

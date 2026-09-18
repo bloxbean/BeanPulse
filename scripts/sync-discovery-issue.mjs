@@ -1,14 +1,15 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { discoveryIssueBody, previousRepositories, repositoryChanges } from './discovery-issue-utils.mjs'
+import { DISCOVERY_ISSUE_TITLE, discoveryIssueBody, isDiscoveryIssue, previousRepositories, repositoryChanges } from './discovery-issue-utils.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const data = JSON.parse(await readFile(path.join(root, 'data/projects.json'), 'utf8'))
 const token = process.env.GITHUB_TOKEN || ''
 const targetRepository = process.env.GITHUB_REPOSITORY || ''
 const apiRoot = process.env.GITHUB_API_URL || 'https://api.github.com'
-const title = 'Repository discovery inbox'
+const title = DISCOVERY_ISSUE_TITLE
+const legacyTitle = 'Repository discovery inbox'
 
 if (!token || !targetRepository) {
   throw new Error('GITHUB_TOKEN and GITHUB_REPOSITORY are required to synchronize the discovery inbox')
@@ -30,7 +31,10 @@ async function github(endpoint, options = {}) {
 
 const available = (data.catalog ?? []).filter((repository) => !repository.watched)
 const issues = await github(`/repos/${targetRepository}/issues?state=all&per_page=100&sort=updated&direction=desc`)
-const existing = issues.find((issue) => !issue.pull_request && issue.title === title)
+const candidates = issues.filter((issue) => !issue.pull_request)
+const existing =
+  candidates.find((issue) => isDiscoveryIssue(issue.body)) ??
+  candidates.find((issue) => issue.title === title || issue.title === legacyTitle)
 
 if (!available.length && !existing) {
   console.log('Every discovered repository is already watched.')
@@ -50,14 +54,14 @@ const previousNames = previousRepositories(existing.body)
 const { added, removed } = repositoryChanges(previousNames, nextNames)
 const desiredState = available.length ? 'open' : 'closed'
 
-if (!added.length && !removed.length && existing.state === desiredState) {
+if (!added.length && !removed.length && existing.state === desiredState && existing.title === title) {
   console.log('Repository discovery inbox is already current.')
   process.exit(0)
 }
 
 await github(`/repos/${targetRepository}/issues/${existing.number}`, {
   method: 'PATCH',
-  body: JSON.stringify({ body, state: desiredState }),
+  body: JSON.stringify({ title, body, state: desiredState }),
 })
 
 if (added.length) {

@@ -1,3 +1,11 @@
+export const DISCOVERY_ISSUE_TITLE = '[Automated] Repository discovery inbox'
+
+const MARKER_PREFIX = '<!-- beanpulse-discovery:'
+
+export function isDiscoveryIssue(body = '') {
+  return String(body).includes(MARKER_PREFIX)
+}
+
 function safeText(value = '') {
   return String(value)
     .replace(/[\r\n]+/g, ' ')
@@ -7,7 +15,7 @@ function safeText(value = '') {
 }
 
 function marker(repositories) {
-  return `<!-- beanpulse-discovery:${JSON.stringify(repositories)} -->`
+  return `${MARKER_PREFIX}${JSON.stringify(repositories)} -->`
 }
 
 function repositoryList(repositories) {
@@ -39,6 +47,13 @@ export function discoveryIssueBody(data, available) {
   const repositories = available.map((repository) => repository.repository).sort()
   return `# Repository discovery inbox
 
+> **Automated issue — please do not edit or close it by hand.**
+> The BeanPulse refresh workflow rewrites this issue twice a day. Any manual
+> change to the title or body is overwritten on the next run, and closing it
+> will not stick while untracked repositories remain.
+> To act on it, add repositories to \`config/projects.json\`; this issue closes
+> itself once every discovered repository is tracked.
+
 BeanPulse discovered **${data.catalog?.length ?? 0}** eligible public repositories in the **${data.organization}** organization. Detailed tracking is enabled for **${watchedCount}**.
 
 Use the project catalog on the BeanPulse home page to select repositories and prepare a tracking request. A maintainer can then add the approved repositories to \`config/projects.json\`.
@@ -51,7 +66,7 @@ ${repositoryList(recent)}
 
 ${repositoryList(older)}
 
-This issue is maintained automatically. Subscribe to it to be notified when the discovery catalog changes.
+Subscribe to this issue to be notified when the discovery catalog changes.
 
 ${marker(repositories)}
 `
