@@ -1,0 +1,109 @@
+{
+  "organization": "bloxbean",
+  "discovery": {
+    "excludeRepositories": [
+      "bloxbean/BeanPulse"
+    ],
+    "newRepositoryWindowDays": 30
+  },
+  "projects": [
+    {
+      "slug": "yaci-store",
+      "name": "Yaci Store",
+      "repository": "bloxbean/yaci-store",
+      "description": "A modular Cardano data store and indexer framework.",
+      "accent": "#0eadde"
+    },
+    {
+      "slug": "julc",
+      "name": "JuLC",
+      "repository": "bloxbean/julc",
+      "description": "An experimental Java-to-UPLC compiler for Cardano.",
+      "accent": "#8b5cf6"
+    },
+    {
+      "slug": "zeroj",
+      "name": "ZeroJ",
+      "repository": "bloxbean/zeroj",
+      "description": "A Java library for building zero-knowledge proofs on Cardano.",
+      "accent": "#f59e0b"
+    },
+    {
+      "slug": "kavach",
+      "name": "Kavach",
+      "repository": "bloxbean/kavach",
+      "description": "A Bloxbean Java project.",
+      "accent": "#14b8a6"
+    },
+    {
+      "slug": "yano-wallet",
+      "name": "Yano Wallet",
+      "repository": "bloxbean/yano-wallet",
+      "description": "A wallet application in the Yano ecosystem.",
+      "accent": "#ec4899"
+    },
+    {
+      "slug": "yano-x",
+      "name": "Yano X",
+      "repository": "bloxbean/yano-x",
+      "description": "A Java project in the Yano ecosystem.",
+      "accent": "#6366f1"
+    },
+    {
+      "slug": "zeroj-usecases",
+      "name": "ZeroJ Use Cases",
+      "repository": "bloxbean/zeroj-usecases",
+      "description": "Real-world zero-knowledge proof use cases built with ZeroJ, including Cardano integrations.",
+      "accent": "#f97316"
+    },
+    {
+      "slug": "yano",
+      "name": "Yano",
+      "repository": "bloxbean/yano",
+      "description": "A Cardano data node written in Java and powered by Yaci.",
+      "accent": "#22c55e"
+    },
+    {
+      "slug": "yaci-devkit",
+      "name": "Yaci DevKit",
+      "repository": "bloxbean/yaci-devkit",
+      "description": "Development tools for building on Cardano with a local devnet.",
+      "accent": "#06b6d4"
+    },
+    {
+      "slug": "yaci-viewer",
+      "name": "Yaci Viewer",
+      "repository": "bloxbean/yaci-viewer",
+      "description": "A Svelte-based viewer for Yaci.",
+      "accent": "#eab308"
+    },
+    {
+      "slug": "aiken-java-binding",
+      "name": "Aiken Java Binding",
+      "repository": "bloxbean/aiken-java-binding",
+      "description": "A Java binding for Aiken.",
+      "accent": "#a855f7"
+    },
+    {
+      "slug": "yaci",
+      "name": "Yaci",
+      "repository": "bloxbean/yaci",
+      "description": "A Cardano mini-protocols implementation in Java.",
+      "accent": "#3b82f6"
+    },
+    {
+      "slug": "cardano-client-lib",
+      "name": "Cardano Client Lib",
+      "repository": "bloxbean/cardano-client-lib",
+      "description": "A Cardano client library in Java.",
+      "accent": "#ef4444"
+    },
+    {
+      "slug": "mesmo",
+      "name": "Mesmo",
+      "repository": "bloxbean/mesmo",
+      "description": "Native bindings that bring Cardano Client Lib to non-Java languages.",
+      "accent": "#84cc16"
+    }
+  ]
+}

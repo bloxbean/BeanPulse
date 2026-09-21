@@ -1,0 +1,12 @@
+{
+  "name": "bean-pulse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "data:refresh": "node scripts/fetch-project-data.mjs",
+    "dev": "node scripts/serve.mjs",
+    "test": "node --test scripts/*.test.mjs",
+    "verify": "npm test && node --check assets/app.js && node --check scripts/discovery-issue-utils.mjs && node --check scripts/fetch-project-data.mjs && node --check scripts/public-github-preview.mjs && node --check scripts/serve.mjs && node --check scripts/sync-discovery-issue.mjs"
+  }
+}

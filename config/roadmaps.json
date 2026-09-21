@@ -1,0 +1,23 @@
+{
+  "yaci-store": {
+    "3.0.0-beta4": {
+      "goal": "Expand Blockfrost compatibility with broader network coverage and production-grade asset behaviour.",
+      "outcomes": [
+        {
+          "id": "network-api-coverage",
+          "title": "Broader Blockfrost network coverage",
+          "description": "Applications can access Blockfrost-compatible network information through Yaci Store, expanding the API surface available without changing providers.",
+          "pullRequests": [866],
+          "issues": []
+        },
+        {
+          "id": "asset-api-reliability",
+          "title": "Reliable asset responses at scale",
+          "description": "Asset history, holder, and policy results match Blockfrost ordering and burn semantics while remaining responsive for high-activity assets and large policies.",
+          "pullRequests": [984],
+          "issues": []
+        }
+      ]
+    }
+  }
+}
