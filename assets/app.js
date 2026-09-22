@@ -302,7 +302,7 @@ function renderReleaseDirectory(project, limit) {
   const releases = limit ? lanes.slice(0, limit) : lanes
   return `
     <section class="release-directory">
-      <div class="section-heading"><div><span class="section-kicker">Release directory</span><h2>${state.view === 'overview' ? 'Delivery lanes' : 'Choose a release'}</h2></div><p>PRs and issues grouped by version labels, milestones, and release branches.</p></div>
+      <div class="section-heading"><div><span class="section-kicker">Release directory</span><h2>${state.view === 'overview' ? 'Delivery lanes' : 'Choose a release'}</h2></div><p>PRs and issues grouped by milestone.</p></div>
       <div class="release-grid">
         ${releases.map((release) => renderReleaseCard(project, release)).join('')}
       </div>
@@ -359,8 +359,8 @@ function renderRoadmap(project, release, pullRequests, issues) {
       return { ...outcome, pullRequests: linkedPullRequests, issues: linkedIssues, status: outcomeStatus(linkedPullRequests, linkedIssues) }
     })
   } else {
-    goal = 'An inferred product view of the release, grouped by component labels and change types. Add curated outcomes when product context is available.'
-    outcomes = inferredOutcomes(pullRequests, issues, project.releases.map((item) => item.name))
+    goal = 'An inferred product view of the release, grouped by area: labels and change types. Add curated outcomes when product context is available.'
+    outcomes = inferredOutcomes(pullRequests, issues)
   }
 
   const planned = outcomes.filter((outcome) => outcome.status === 'planned').length
@@ -374,7 +374,7 @@ function renderRoadmap(project, release, pullRequests, issues) {
         <div class="roadmap-totals"><span><strong>${planned}</strong> planned</span><span><strong>${active}</strong> active</span><span><strong>${shipped}</strong> shipped</span></div>
       </div>
       <div class="outcome-grid">
-        ${outcomes.length ? outcomes.map((outcome, index) => renderOutcome(outcome, index, curated)).join('') : '<div class="empty-state compact"><strong>No roadmap outcomes yet</strong><span>Assign a version label to an issue or pull request.</span></div>'}
+        ${outcomes.length ? outcomes.map((outcome, index) => renderOutcome(outcome, index, curated)).join('') : '<div class="empty-state compact"><strong>No roadmap outcomes yet</strong><span>Assign a milestone to an issue or pull request.</span></div>'}
       </div>
     </section>`
 }
@@ -387,22 +387,24 @@ function outcomeStatus(pullRequests, issues) {
   return issues.length ? 'done' : 'planned'
 }
 
-function inferredOutcomes(pullRequests, issues, releaseNames) {
-  const genericLabels = new Set(['bug', 'dependencies', 'documentation', "don't merge", 'enhancement', 'good first issue', 'help wanted', 'high', 'low prio', 'performance', 'question', 'refactor', 'testing'])
+function titleCase(value) {
+  return value.split(/[-_\s]+/).filter(Boolean).map((word) => word[0].toUpperCase() + word.slice(1)).join(' ')
+}
+
+function inferredOutcomes(pullRequests, issues) {
   const themes = new Map()
-  const releaseSet = new Set(releaseNames)
   for (const item of [...pullRequests, ...issues]) {
-    const component = item.labels.find((label) => !releaseSet.has(label.name) && !genericLabels.has(label.name.toLowerCase()))?.name
+    // area: labels are authoritative; a conventional-commit scope is the fallback.
     const scope = item.title.match(/^[a-z]+\(([^)]+)\)\s*:/i)?.[1]
-    const theme = component || (scope ? scope.split(/[-_]/).map((word) => word[0].toUpperCase() + word.slice(1)).join(' ') : 'Platform & general')
+    const theme = item.area ? titleCase(item.area) : (scope ? titleCase(scope) : 'Platform & general')
     const entry = { ...item, kind: 'ci' in item ? 'PR' : 'Issue' }
     themes.set(theme, [...(themes.get(theme) || []), entry])
   }
   return [...themes.entries()].map(([title, items]) => {
     const linkedPullRequests = items.filter((item) => item.kind === 'PR')
     const linkedIssues = items.filter((item) => item.kind === 'Issue')
-    const features = items.filter((item) => /^(feat|feature)/i.test(item.title) || item.labels.some((label) => label.name.toLowerCase() === 'enhancement')).length
-    const fixes = items.filter((item) => /^fix/i.test(item.title) || item.labels.some((label) => label.name.toLowerCase() === 'bug')).length
+    const features = items.filter((item) => item.type === 'feat').length
+    const fixes = items.filter((item) => item.type === 'fix').length
     const changes = Math.max(0, items.length - features - fixes)
     const parts = [[features, 'feature'], [fixes, 'fix'], [changes, 'supporting change']].filter(([count]) => count).map(([count, label]) => `${count} ${label}${count === 1 ? '' : 's'}`)
     return {

@@ -78,10 +78,20 @@ has issue-write permission in BeanPulse; the browser has no write permission.
 
 ## Release model
 
-A version-like label, milestone, or `release/<version>` PR base branch creates a
-release assignment. All assignments are retained and the same version is
-de-duplicated. Items with no assignment are calculated by the UI as the
-**Unassigned** lane.
+A GitHub milestone creates the release assignment, and every milestone in a
+repository becomes a lane even before work is assigned to it. Items with no
+milestone are calculated by the UI as the **Unassigned** lane.
+
+Labels are read on three independent axes, none of which affects the release:
+
+| Prefix | Meaning | Example |
+| --- | --- | --- |
+| `area:` | Functional area | `area:bf-api` |
+| `type:` | Change type, when the title carries no prefix | `type:chore` |
+| `priority:` | Priority | `priority:P1` |
+
+The change type is read from a conventional-commit title prefix first, such as
+`feat(core): …`, and falls back to a `type:` label.
 
 Release progress is calculated from its PRs and issues:
 

@@ -14,7 +14,7 @@ choose which projects should receive full tracking.
 - Automatic discovery of public repositories in the Bloxbean organization.
 - An Available projects catalog for selecting and requesting new watchlist entries.
 - Overview, release, pull request, and issue views for every project.
-- Release grouping from version labels, milestones, and `release/*` branches.
+- Release grouping from GitHub milestones, with `area:`, `type:` and `priority:` labels for classification.
 - A dedicated **Unassigned** lane for work without a release version.
 - Product-outcome roadmaps with links to the implementing PRs and issues.
 - Search, status filters, progress totals, review state, and CI state.
@@ -60,8 +60,8 @@ snapshot or sent to the browser.
    and completion totals.
 4. Use **Pull requests** or **Issues** to search all collected work and filter by
    status.
-5. Select **Unassigned** under Releases to find work that still needs a version
-   label, milestone, or release branch.
+5. Select **Unassigned** under Releases to find work that still needs a
+   milestone.
 6. Follow any item number to open the original GitHub record.
 
 On the home page, **Available projects** lists repositories that BeanPulse has
@@ -79,9 +79,8 @@ BeanPulse recognizes version names such as `3.0.0-beta4`, `0.1.0-pre17`,
 `2.0.1`, and `2.0.x`. A PR or issue is associated with a release when the version
 appears in any of these places:
 
-1. A GitHub label.
-2. A GitHub milestone.
-3. The PR base branch in the form `release/<version>`.
+A GitHub milestone. Version labels and `release/*` base branches are no longer
+release signals; labels carry area, type and priority instead.
 
 If none applies, the item appears in **Unassigned**. See
 [Project and roadmap configuration](docs/CONFIGURATION.md) for examples and edge
