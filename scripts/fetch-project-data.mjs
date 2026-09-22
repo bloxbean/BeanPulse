@@ -10,6 +10,7 @@ import {
   plainSummary,
   releaseAssignments,
   reviewSummary,
+  roadmapClaims,
 } from './release-data-utils.mjs'
 import { collectPublicPreview } from './public-github-preview.mjs'
 
@@ -67,6 +68,17 @@ async function collectProject(project) {
   const issues = repositoryItems.filter((item) => !item.pull_request)
   const pullAssignments = new Map(pullRequests.map((pullRequest) => [pullRequest.number, releaseAssignments(pullRequest)]))
   const issueAssignments = new Map(issues.map((issue) => [issue.number, releaseAssignments(issue)]))
+
+  const projectRoadmap = roadmaps[project.slug] ?? {}
+  const claims = roadmapClaims(projectRoadmap)
+  const claim = (assignments, number, release) => {
+    const existing = assignments.get(number)
+    if (existing && !existing.some((assignment) => assignment.name === release)) existing.push({ name: release, source: 'roadmap' })
+  }
+  for (const { release, pullRequests: claimedPulls, issues: claimedIssues } of claims) {
+    for (const number of claimedPulls) claim(pullAssignments, number, release)
+    for (const number of claimedIssues) claim(issueAssignments, number, release)
+  }
   const details = new Map()
 
   const detailTargets = pullRequests
@@ -159,6 +171,11 @@ async function collectProject(project) {
       dueOn: milestone.due_on ?? null,
       url: milestone.html_url ?? null,
     })
+  }
+  for (const { release: name } of claims) {
+    if (releasesByName.has(name)) continue
+    console.warn(`${project.repository}: curated roadmap "${name}" has no milestone. Keeping the lane from the roadmap; create the milestone to restore automatic membership.`)
+    releasesByName.set(name, { name, color: '14b8a6', sources: ['roadmap'], state: 'open', dueOn: null, url: null })
   }
   for (const assignments of [...pullAssignments.values(), ...issueAssignments.values()]) {
     for (const assignment of assignments) {

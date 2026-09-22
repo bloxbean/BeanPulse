@@ -57,6 +57,16 @@ export function releaseAssignments(item) {
   return name ? [{ name, source: 'milestone' }] : []
 }
 
+// A curated roadmap is itself a release assignment: it names the work belonging to a
+// release, so the lane survives even when no milestone exists for it yet.
+export function roadmapClaims(projectRoadmap = {}) {
+  return Object.entries(projectRoadmap).map(([release, entry]) => ({
+    release: String(release).trim(),
+    pullRequests: [...new Set((entry?.outcomes ?? []).flatMap((outcome) => outcome?.pullRequests ?? []))],
+    issues: [...new Set((entry?.outcomes ?? []).flatMap((outcome) => outcome?.issues ?? []))],
+  })).filter((claim) => claim.release)
+}
+
 // Type comes from a conventional-commit title prefix, and falls back to a `type:` label.
 export function itemType(item) {
   const prefix = String(item.title ?? '').match(/^\s*([A-Za-z]+)(?:\([^)]*\))?!?:\s/)?.[1]

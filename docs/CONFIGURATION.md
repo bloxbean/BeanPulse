@@ -94,6 +94,17 @@ A release is a **GitHub milestone**. Nothing else creates one: version labels
 and `release/<version>` branches are ignored. Every milestone becomes a lane, so
 an empty milestone still shows as planned work.
 
+A curated roadmap is the one exception. Because it names the work belonging to a
+release, its key holds a lane open and claims the PRs and issues it lists, even
+when no milestone exists yet. A refresh warns when this happens:
+
+```text
+bloxbean/yaci-store: curated roadmap "3.0.0-beta4" has no milestone.
+```
+
+Create the milestone to restore automatic membership. Until then the roadmap
+still renders and its items stay out of **Unassigned**.
+
 Labels classify work on three independent axes:
 
 | Prefix | Meaning | Example |
