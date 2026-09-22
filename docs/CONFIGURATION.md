@@ -91,11 +91,11 @@ Examples:
 - `2.0.x`
 
 A release is a **GitHub milestone**. Nothing else creates one: version labels
-and `release/<version>` branches are ignored. Every milestone becomes a lane, so
-an empty milestone still shows as planned work.
+and `release/<version>` branches are ignored. Every milestone becomes a release,
+so an empty milestone still shows as planned work.
 
 A curated roadmap is the one exception. Because it names the work belonging to a
-release, its key holds a lane open and claims the PRs and issues it lists, even
+release, its key holds the release open and claims the PRs and issues it lists, even
 when no milestone exists yet. A refresh warns when this happens:
 
 ```text

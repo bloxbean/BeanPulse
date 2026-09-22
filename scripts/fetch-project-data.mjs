@@ -174,7 +174,7 @@ async function collectProject(project) {
   }
   for (const { release: name } of claims) {
     if (releasesByName.has(name)) continue
-    console.warn(`${project.repository}: curated roadmap "${name}" has no milestone. Keeping the lane from the roadmap; create the milestone to restore automatic membership.`)
+    console.warn(`${project.repository}: curated roadmap "${name}" has no milestone. Keeping the release from the roadmap; create the milestone to restore automatic membership.`)
     releasesByName.set(name, { name, color: '14b8a6', sources: ['roadmap'], state: 'open', dueOn: null, url: null })
   }
   for (const assignments of [...pullAssignments.values(), ...issueAssignments.values()]) {

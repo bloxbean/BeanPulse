@@ -77,7 +77,7 @@ test('turns markdown bodies into concise product context', () => {
   assert.equal(plainSummary(null), '')
 })
 
-test('a curated roadmap claims the work it names, so its lane survives without a milestone', () => {
+test('a curated roadmap claims the work it names, so its release survives without a milestone', () => {
   assert.deepEqual(roadmapClaims({
     '3.0.0-beta4': { outcomes: [{ pullRequests: [866], issues: [] }, { pullRequests: [984, 866], issues: [12] }] },
   }), [{ release: '3.0.0-beta4', pullRequests: [866, 984], issues: [12] }])

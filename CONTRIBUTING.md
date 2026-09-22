@@ -29,7 +29,7 @@ For project or data changes, check:
 - The Available projects catalog, selection state, and tracking-request link.
 - The project's Overview page.
 - Its Releases directory and at least one release detail page.
-- The Unassigned lane.
+- The Unassigned entry.
 - Pull request and issue search and filters.
 - Narrow-screen layout when the UI changed.
 

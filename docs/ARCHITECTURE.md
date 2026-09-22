@@ -79,10 +79,10 @@ has issue-write permission in BeanPulse; the browser has no write permission.
 ## Release model
 
 A GitHub milestone creates the release assignment, and every milestone in a
-repository becomes a lane even before work is assigned to it. A curated roadmap
-also holds a lane open and claims the items it names, so hand-written product
-context is never orphaned by a missing milestone. Items with neither are
-calculated by the UI as the **Unassigned** lane.
+repository becomes a release even before work is assigned to it. A curated
+roadmap also holds a release open and claims the items it names, so hand-written
+product context is never orphaned by a missing milestone. Items with neither are
+calculated by the UI as **Unassigned**.
 
 Labels are read on three independent axes, none of which affects the release:
 

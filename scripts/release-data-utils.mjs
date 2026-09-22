@@ -58,7 +58,7 @@ export function releaseAssignments(item) {
 }
 
 // A curated roadmap is itself a release assignment: it names the work belonging to a
-// release, so the lane survives even when no milestone exists for it yet.
+// release, so the release survives even when no milestone exists for it yet.
 export function roadmapClaims(projectRoadmap = {}) {
   return Object.entries(projectRoadmap).map(([release, entry]) => ({
     release: String(release).trim(),
@@ -102,7 +102,7 @@ function versionParts(version) {
   }
 }
 
-// Milestones that are not versions still deserve a lane; they sort after the versioned ones.
+// Milestones that are not versions still deserve a place; they sort after the versioned ones.
 export function compareReleaseNames(left, right) {
   const leftVersion = isVersionName(left)
   const rightVersion = isVersionName(right)

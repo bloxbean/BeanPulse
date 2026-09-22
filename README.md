@@ -15,7 +15,7 @@ choose which projects should receive full tracking.
 - An Available projects catalog for selecting and requesting new watchlist entries.
 - Overview, release, pull request, and issue views for every project.
 - Release grouping from GitHub milestones, with `area:`, `type:` and `priority:` labels for classification.
-- A dedicated **Unassigned** lane for work without a release version.
+- A dedicated **Unassigned** entry for work without a milestone.
 - Product-outcome roadmaps with links to the implementing PRs and issues.
 - Search, status filters, progress totals, review state, and CI state.
 - Twice-daily, manual, and on-change GitHub Pages refreshes.
@@ -119,7 +119,7 @@ procedures.
    [`config/roadmaps.json`](config/roadmaps.json).
 5. Refresh the data.
 6. Open the project locally and check its Overview, Releases, PRs, Issues, and
-   Unassigned lane.
+   Unassigned entry.
 7. Run the verification suite before opening a PR.
 
 The complete schema and examples are in
