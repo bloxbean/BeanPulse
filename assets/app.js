@@ -82,7 +82,7 @@ function projectStats(project) {
   return { openPullRequests, mergedPullRequests, openIssues, releasePullRequests: releasePullRequests.length }
 }
 
-function projectReleaseLanes(project) {
+function projectReleases(project) {
   const unassignedPullRequests = project.pullRequests.filter((item) => item.releases.length === 0)
   const unassignedIssues = project.issues.filter((item) => item.releases.length === 0)
   if (!unassignedPullRequests.length && !unassignedIssues.length) return project.releases
@@ -161,7 +161,7 @@ function renderPortfolio() {
     <section class="portfolio-strip">
       <div class="page-width portfolio-metrics">
         <div><span>Tracked projects</span><strong>${data.projects.length}</strong></div>
-        <div><span>Release lanes</span><strong>${totals.releases}</strong></div>
+        <div><span>Releases</span><strong>${totals.releases}</strong></div>
         <div><span>Open pull requests</span><strong>${totals.pullRequests}</strong></div>
         <div><span>Open issues</span><strong>${totals.issues}</strong></div>
       </div>
@@ -236,7 +236,7 @@ function openWatchRequest() {
 
 function renderProjectCard(project) {
   const stats = projectStats(project)
-  const newest = project.releases[0] ?? projectReleaseLanes(project).find((release) => release.name === 'Unassigned')
+  const newest = project.releases[0] ?? projectReleases(project).find((release) => release.name === 'Unassigned')
   return `
     <article class="project-card" style="--accent:${escapeHtml(project.accent)}">
       <div class="project-card-head"><span class="project-glyph">${project.name.split(/\s+/).map((word) => word[0]).join('').slice(0, 2)}</span><span class="language">${escapeHtml(project.language || 'Repository')}</span></div>
@@ -275,7 +275,7 @@ function renderOverview(project) {
   const openIssues = project.issues.filter((item) => item.state === 'open').slice(0, 5)
   return `
     <section class="summary-grid">
-      <div class="summary-card featured"><span>Tracked releases</span><strong>${project.releases.length}</strong><small>${icon('pulse', 14)} Version-aware delivery lanes</small></div>
+      <div class="summary-card featured"><span>Tracked releases</span><strong>${project.releases.length}</strong><small>${icon('pulse', 14)} Grouped by milestone</small></div>
       <div class="summary-card"><span>Open pull requests</span><strong>${stats.openPullRequests}</strong><small>${stats.mergedPullRequests} merged historically</small></div>
       <div class="summary-card"><span>Open issues</span><strong>${stats.openIssues}</strong><small>${project.issues.length} total issues collected</small></div>
       <div class="summary-card"><span>Stars</span><strong>${formatNumber(project.stars)}</strong><small>Updated ${relativeDate(project.lastPushedAt)}</small></div>
@@ -298,15 +298,15 @@ function renderActivityPanel(title, kicker, items, kind, targetView) {
 }
 
 function renderReleaseDirectory(project, limit) {
-  const lanes = projectReleaseLanes(project)
-  const releases = limit ? lanes.slice(0, limit) : lanes
+  const allReleases = projectReleases(project)
+  const releases = limit ? allReleases.slice(0, limit) : allReleases
   return `
     <section class="release-directory">
-      <div class="section-heading"><div><span class="section-kicker">Release directory</span><h2>${state.view === 'overview' ? 'Delivery lanes' : 'Choose a release'}</h2></div><p>PRs and issues grouped by version labels, milestones, and release branches.</p></div>
+      <div class="section-heading"><div><span class="section-kicker">Release directory</span><h2>${state.view === 'overview' ? 'Releases' : 'Choose a release'}</h2></div><p>PRs and issues grouped by milestone.</p></div>
       <div class="release-grid">
         ${releases.map((release) => renderReleaseCard(project, release)).join('')}
       </div>
-      ${limit && lanes.length > limit ? `<button class="text-button" data-view="releases" type="button">View all ${lanes.length} lanes ${icon('arrow', 14)}</button>` : ''}
+      ${limit && allReleases.length > limit ? `<button class="text-button" data-view="releases" type="button">View all ${allReleases.length} releases ${icon('arrow', 14)}</button>` : ''}
     </section>`
 }
 
@@ -327,7 +327,7 @@ function renderReleaseCard(project, release) {
 }
 
 function renderReleases(project) {
-  const release = projectReleaseLanes(project).find((item) => item.name === state.release)
+  const release = projectReleases(project).find((item) => item.name === state.release)
   if (!release) return renderReleaseDirectory(project)
 
   const isUnassigned = release.name === 'Unassigned'
@@ -359,8 +359,8 @@ function renderRoadmap(project, release, pullRequests, issues) {
       return { ...outcome, pullRequests: linkedPullRequests, issues: linkedIssues, status: outcomeStatus(linkedPullRequests, linkedIssues) }
     })
   } else {
-    goal = 'An inferred product view of the release, grouped by component labels and change types. Add curated outcomes when product context is available.'
-    outcomes = inferredOutcomes(pullRequests, issues, project.releases.map((item) => item.name))
+    goal = 'An inferred product view of the release, grouped by area: labels and change types. Add curated outcomes when product context is available.'
+    outcomes = inferredOutcomes(pullRequests, issues)
   }
 
   const planned = outcomes.filter((outcome) => outcome.status === 'planned').length
@@ -374,7 +374,7 @@ function renderRoadmap(project, release, pullRequests, issues) {
         <div class="roadmap-totals"><span><strong>${planned}</strong> planned</span><span><strong>${active}</strong> active</span><span><strong>${shipped}</strong> shipped</span></div>
       </div>
       <div class="outcome-grid">
-        ${outcomes.length ? outcomes.map((outcome, index) => renderOutcome(outcome, index, curated)).join('') : '<div class="empty-state compact"><strong>No roadmap outcomes yet</strong><span>Assign a version label to an issue or pull request.</span></div>'}
+        ${outcomes.length ? outcomes.map((outcome, index) => renderOutcome(outcome, index, curated)).join('') : '<div class="empty-state compact"><strong>No roadmap outcomes yet</strong><span>Assign a milestone to an issue or pull request.</span></div>'}
       </div>
     </section>`
 }
@@ -387,22 +387,24 @@ function outcomeStatus(pullRequests, issues) {
   return issues.length ? 'done' : 'planned'
 }
 
-function inferredOutcomes(pullRequests, issues, releaseNames) {
-  const genericLabels = new Set(['bug', 'dependencies', 'documentation', "don't merge", 'enhancement', 'good first issue', 'help wanted', 'high', 'low prio', 'performance', 'question', 'refactor', 'testing'])
+function titleCase(value) {
+  return value.split(/[-_\s]+/).filter(Boolean).map((word) => word[0].toUpperCase() + word.slice(1)).join(' ')
+}
+
+function inferredOutcomes(pullRequests, issues) {
   const themes = new Map()
-  const releaseSet = new Set(releaseNames)
   for (const item of [...pullRequests, ...issues]) {
-    const component = item.labels.find((label) => !releaseSet.has(label.name) && !genericLabels.has(label.name.toLowerCase()))?.name
+    // area: labels are authoritative; a conventional-commit scope is the fallback.
     const scope = item.title.match(/^[a-z]+\(([^)]+)\)\s*:/i)?.[1]
-    const theme = component || (scope ? scope.split(/[-_]/).map((word) => word[0].toUpperCase() + word.slice(1)).join(' ') : 'Platform & general')
+    const theme = item.area ? titleCase(item.area) : (scope ? titleCase(scope) : 'Platform & general')
     const entry = { ...item, kind: 'ci' in item ? 'PR' : 'Issue' }
     themes.set(theme, [...(themes.get(theme) || []), entry])
   }
   return [...themes.entries()].map(([title, items]) => {
     const linkedPullRequests = items.filter((item) => item.kind === 'PR')
     const linkedIssues = items.filter((item) => item.kind === 'Issue')
-    const features = items.filter((item) => /^(feat|feature)/i.test(item.title) || item.labels.some((label) => label.name.toLowerCase() === 'enhancement')).length
-    const fixes = items.filter((item) => /^fix/i.test(item.title) || item.labels.some((label) => label.name.toLowerCase() === 'bug')).length
+    const features = items.filter((item) => item.type === 'feat').length
+    const fixes = items.filter((item) => item.type === 'fix').length
     const changes = Math.max(0, items.length - features - fixes)
     const parts = [[features, 'feature'], [fixes, 'fix'], [changes, 'supporting change']].filter(([count]) => count).map(([count, label]) => `${count} ${label}${count === 1 ? '' : 's'}`)
     return {

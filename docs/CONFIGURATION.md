@@ -90,18 +90,52 @@ Examples:
 - `v2.1.0-rc1`
 - `2.0.x`
 
-Category labels such as `enhancement`, `bug`, or `documentation` are not treated
-as releases.
+A release is a **GitHub milestone**. Nothing else creates one: version labels
+and `release/<version>` branches are ignored. Every milestone becomes a release,
+so an empty milestone still shows as planned work.
 
-BeanPulse checks these sources:
+A curated roadmap is the one exception. Because it names the work belonging to a
+release, its key holds the release open and claims the PRs and issues it lists, even
+when no milestone exists yet. A refresh warns when this happens:
 
-1. Version labels on PRs and issues.
-2. Version milestones on PRs and issues.
-3. PR base branches named `release/<version>`.
+```text
+bloxbean/yaci-store: curated roadmap "3.0.0-beta4" has no milestone.
+```
 
-The same version found in more than one place is de-duplicated. If an item has
-two different valid version assignments, it appears in both releases. Resolve
-conflicting metadata in GitHub when that is not intended.
+Create the milestone to restore automatic membership. Until then the roadmap
+still renders and its items stay out of **Unassigned**.
+
+Labels classify work on three independent axes:
+
+| Prefix | Meaning | Example |
+| --- | --- | --- |
+| `area:` | Functional area | `area:bf-api`, `area:core-api`, `area:mcp` |
+| `type:` | Change type | `type:chore` |
+| `priority:` | Priority | `priority:P1` |
+
+The change type is taken from a conventional-commit title prefix when present
+(`feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`,
+`style`, `revert`, plus aliases such as `feature` and `bug`), and falls back to a
+`type:` label.
+
+### Area aliases
+
+Renaming labels across repositories takes time. Until then, `areaAliases` maps
+existing label names onto canonical areas, so no repository has to be edited for
+areas to appear:
+
+```json
+{
+  "areaAliases": {
+    "Blockfrost API": "bf-api",
+    "bf-api": "bf-api",
+    "Core API": "core-api"
+  }
+}
+```
+
+Matching is case-insensitive. An `area:` label on an item always wins over an
+alias. Once a repository adopts `area:` labels, its aliases can be deleted.
 
 ## Add a curated roadmap
 

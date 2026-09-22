@@ -3,11 +3,14 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import {
   ciSummary,
-  compareVersionsDescending,
-  isVersionName,
+  compareReleaseNames,
+  itemArea,
+  itemPriority,
+  itemType,
   plainSummary,
   releaseAssignments,
   reviewSummary,
+  roadmapClaims,
 } from './release-data-utils.mjs'
 import { collectPublicPreview } from './public-github-preview.mjs'
 
@@ -18,6 +21,7 @@ const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || ''
 const apiRoot = process.env.GITHUB_API_URL || 'https://api.github.com'
 const detailLimit = Number(process.env.PR_DETAIL_LIMIT || (token ? 100 : 8))
 const discovery = config.discovery ?? {}
+const areaAliases = new Map(Object.entries(config.areaAliases ?? {}).map(([label, area]) => [label.toLowerCase(), area]))
 
 const headers = {
   Accept: 'application/vnd.github+json',
@@ -54,9 +58,9 @@ async function collectProject(project) {
   const [owner, repository] = project.repository.split('/')
   console.log(`Collecting ${project.repository}…`)
 
-  const [repositoryInfo, labels, pullRequests, repositoryItems] = await Promise.all([
+  const [repositoryInfo, milestones, pullRequests, repositoryItems] = await Promise.all([
     github(`/repos/${owner}/${repository}`),
-    paginate(`/repos/${owner}/${repository}/labels`),
+    paginate(`/repos/${owner}/${repository}/milestones?state=all`),
     paginate(`/repos/${owner}/${repository}/pulls?state=all&sort=updated&direction=desc`),
     paginate(`/repos/${owner}/${repository}/issues?state=all&sort=updated&direction=desc`, 10),
   ])
@@ -64,6 +68,17 @@ async function collectProject(project) {
   const issues = repositoryItems.filter((item) => !item.pull_request)
   const pullAssignments = new Map(pullRequests.map((pullRequest) => [pullRequest.number, releaseAssignments(pullRequest)]))
   const issueAssignments = new Map(issues.map((issue) => [issue.number, releaseAssignments(issue)]))
+
+  const projectRoadmap = roadmaps[project.slug] ?? {}
+  const claims = roadmapClaims(projectRoadmap)
+  const claim = (assignments, number, release) => {
+    const existing = assignments.get(number)
+    if (existing && !existing.some((assignment) => assignment.name === release)) existing.push({ name: release, source: 'roadmap' })
+  }
+  for (const { release, pullRequests: claimedPulls, issues: claimedIssues } of claims) {
+    for (const number of claimedPulls) claim(pullAssignments, number, release)
+    for (const number of claimedIssues) claim(issueAssignments, number, release)
+  }
   const details = new Map()
 
   const detailTargets = pullRequests
@@ -112,6 +127,9 @@ async function collectProject(project) {
       labels: (pullRequest.labels ?? []).map((label) => ({ name: label.name, color: color(label.color) })),
       milestone: pullRequest.milestone?.title ?? null,
       baseBranch: pullRequest.base?.ref ?? '',
+      type: itemType(pullRequest),
+      area: itemArea(pullRequest, areaAliases),
+      priority: itemPriority(pullRequest),
       releases: pullAssignments.get(pullRequest.number),
       review: detail.review,
       ci: detail.ci,
@@ -132,6 +150,9 @@ async function collectProject(project) {
     author: { login: issue.user?.login ?? 'ghost', avatarUrl: issue.user?.avatar_url ?? '', url: issue.user?.html_url ?? '' },
     labels: (issue.labels ?? []).map((label) => ({ name: typeof label === 'string' ? label : label.name, color: typeof label === 'string' ? '7b8ba7' : color(label.color) })),
     milestone: issue.milestone?.title ?? null,
+    type: itemType(issue),
+    area: itemArea(issue, areaAliases),
+    priority: itemPriority(issue),
     releases: issueAssignments.get(issue.number),
     createdAt: issue.created_at,
     updatedAt: issue.updated_at,
@@ -139,19 +160,33 @@ async function collectProject(project) {
   }))
 
   const releasesByName = new Map()
-  for (const label of labels.filter((candidate) => isVersionName(candidate.name))) {
-    releasesByName.set(label.name, { name: label.name, color: color(label.color), sources: ['label'] })
+  for (const milestone of milestones) {
+    const name = String(milestone.title ?? '').trim()
+    if (!name) continue
+    releasesByName.set(name, {
+      name,
+      color: milestone.state === 'closed' ? '8b5cf6' : '14b8a6',
+      sources: ['milestone'],
+      state: milestone.state,
+      dueOn: milestone.due_on ?? null,
+      url: milestone.html_url ?? null,
+    })
+  }
+  for (const { release: name } of claims) {
+    if (releasesByName.has(name)) continue
+    console.warn(`${project.repository}: curated roadmap "${name}" has no milestone. Keeping the release from the roadmap; create the milestone to restore automatic membership.`)
+    releasesByName.set(name, { name, color: '14b8a6', sources: ['roadmap'], state: 'open', dueOn: null, url: null })
   }
   for (const assignments of [...pullAssignments.values(), ...issueAssignments.values()]) {
     for (const assignment of assignments) {
       const existing = releasesByName.get(assignment.name)
-      if (!existing) releasesByName.set(assignment.name, { name: assignment.name, color: assignment.source === 'branch' ? '8b5cf6' : '14b8a6', sources: [assignment.source] })
+      if (!existing) releasesByName.set(assignment.name, { name: assignment.name, color: '14b8a6', sources: [assignment.source], state: 'open', dueOn: null, url: null })
       else if (!existing.sources.includes(assignment.source)) existing.sources.push(assignment.source)
     }
   }
 
   const releases = [...releasesByName.values()]
-    .sort((left, right) => compareVersionsDescending(left.name, right.name))
+    .sort((left, right) => compareReleaseNames(left.name, right.name))
     .map((release) => {
       const scopedPullRequests = compactPullRequests.filter((pullRequest) => pullRequest.releases.some((assignment) => assignment.name === release.name))
       const scopedIssues = compactIssues.filter((issue) => issue.releases.some((assignment) => assignment.name === release.name))
@@ -178,7 +213,7 @@ async function collectProject(project) {
     language: repositoryInfo.language,
     stars: repositoryInfo.stargazers_count,
     lastPushedAt: repositoryInfo.pushed_at,
-    releaseConvention: 'Version labels, then version milestones, then release/* branches',
+    releaseConvention: 'Milestones. Labels carry area:, type: and priority: instead.',
     releases,
     pullRequests: compactPullRequests,
     issues: compactIssues,

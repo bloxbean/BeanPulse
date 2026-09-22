@@ -195,9 +195,9 @@ authenticated run should be restored promptly.
 
 ### A PR or issue is in the wrong release
 
-Check its labels, milestone, and PR base branch. Conflicting valid versions place
-the item in more than one release. Remove the incorrect assignment in the source
-repository and run a refresh.
+Check its milestone, which is the only thing that places an item in a release.
+Correct the milestone in the source repository and run a refresh. An item with no
+milestone appears under **Unassigned**.
 
 ### A roadmap reference is missing
 
