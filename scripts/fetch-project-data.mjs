@@ -10,6 +10,7 @@ import {
   reviewSummary,
 } from './release-data-utils.mjs'
 import { collectPublicPreview } from './public-github-preview.mjs'
+import { BUILD_FILES, buildReleaseTrain, readBuildFile, releaseNames } from './dependency-data-utils.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const config = JSON.parse(await readFile(path.join(root, 'config/projects.json'), 'utf8'))
@@ -186,6 +187,43 @@ async function collectProject(project) {
   }
 }
 
+async function buildFile(repository, branch, file) {
+  try {
+    const content = await github(`/repos/${repository}/contents/${file}?ref=${encodeURIComponent(branch)}`)
+    return Buffer.from(content.content ?? '', 'base64').toString('utf8')
+  } catch (error) {
+    if (error.message.includes(' 404 ')) return ''
+    throw error
+  }
+}
+
+// The release train (config `releaseTrain`): each listed project's own version and its pins on the others, from
+// its Gradle build files on its default branch (or the configured one), and its GitHub releases.
+async function collectReleaseTrain() {
+  const entries = config.releaseTrain?.projects ?? []
+  if (!entries.length) return null
+  const projects = []
+  for (const entry of entries) {
+    const project = config.projects.find((candidate) => candidate.slug === entry.slug)
+    if (!project) throw new Error(`releaseTrain names ${entry.slug}, which is not a watched project`)
+    console.log(`Reading build files of ${project.repository}…`)
+    const repository = await github(`/repos/${project.repository}`)
+    const branch = entry.branch ?? repository.default_branch
+    const files = await Promise.all(BUILD_FILES.map((file) => buildFile(project.repository, branch, file)))
+    projects.push({
+      slug: project.slug,
+      name: project.name,
+      repository: project.repository,
+      branch,
+      keys: entry.keys ?? [],
+      parts: entry.parts ?? [],
+      entries: files.flatMap((text, index) => readBuildFile(text, BUILD_FILES[index])),
+      releases: releaseNames(await github(`/repos/${project.repository}/releases?per_page=100`)),
+    })
+  }
+  return { generatedAt: new Date().toISOString(), ...buildReleaseTrain(projects) }
+}
+
 function configuredCatalog() {
   return config.projects.map((project) => ({
     repository: project.repository,
@@ -237,10 +275,12 @@ async function collectCatalog() {
 
 let cachedProjects = new Map()
 let cachedCatalog = []
+let cachedReleaseTrain = null
 try {
   const cached = JSON.parse(await readFile(path.join(root, 'data/projects.json'), 'utf8'))
   cachedProjects = new Map((cached.projects ?? []).map((project) => [project.repository, project]))
   cachedCatalog = cached.catalog ?? []
+  cachedReleaseTrain = cached.releaseTrain ?? null
 } catch {
   // A cache is optional on the first run.
 }
@@ -270,11 +310,20 @@ for (const project of config.projects) {
   }
 }
 
+let releaseTrain
+try {
+  releaseTrain = await collectReleaseTrain()
+} catch (error) {
+  console.warn(`${error.message}. Keeping the existing release train.`)
+  releaseTrain = cachedReleaseTrain
+}
+
 const output = {
   organization: config.organization,
   generatedAt: new Date().toISOString(),
   catalog,
   projects,
+  releaseTrain,
 }
 
 await mkdir(path.join(root, 'data'), { recursive: true })

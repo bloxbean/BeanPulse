@@ -74,6 +74,47 @@ To remove a project, delete its configuration object and refresh the snapshot.
 The repository returns to Available projects unless it is also excluded. This
 changes BeanPulse only and never modifies the source repository.
 
+## Release train
+
+The `releaseTrain` section of `config/projects.json` lists the watched projects
+whose versions depend on each other. For each one the collector reads
+`gradle.properties` and `gradle/libs.versions.toml` on its default branch, and its
+GitHub releases.
+
+```json
+"releaseTrain": {
+  "projects": [
+    { "slug": "cardano-client-lib", "keys": ["cardano-client-lib", "cardanoClientLibVersion"] },
+    { "slug": "yaci", "branch": "next", "keys": ["yaci"] },
+    { "slug": "yano", "keys": [], "parts": [
+      { "slug": "yano-foundation", "name": "Yano foundation", "note": "node API, host API",
+        "keys": ["yanoVersion", "nodeApiVersion", "hostApiVersion"] }
+    ] }
+  ]
+}
+```
+
+| Field | Rules |
+| --- | --- |
+| `slug` | A watched project from `projects`. |
+| `branch` | Optional. The branch whose build files count, when it is not the default branch. |
+| `keys` | The names other projects use to pin this project: a `gradle.properties` key, a `[versions]` key, or the artifact name in a `group:artifact:version` coordinate. |
+| `parts` | Optional. Artifacts the project publishes on their own, such as its APIs, used by a project that the main project itself uses. A pin on a part's keys points at the part, which breaks what would otherwise be a cycle. |
+
+How a pin is judged:
+
+- **Latest release:** the pinned version is the newest GitHub release of its line
+  (major.minor), in GitHub's release order.
+- **Behind:** it is an older release.
+- **Unreleased:** it is not a release at all, for example a `-SNAPSHOT` or a
+  qualification build such as `0.1.0-pre6-a3ef67b36`. It blocks a release of the
+  project that pins it.
+
+Release rehearsal tags ending in `-dev<n>` are ignored. A project's release step
+is one more than the highest step among the projects it uses. A project is also
+flagged when its own version is already released, because its next release needs
+a new version.
+
 ## Release conventions
 
 The recognized version format is:

@@ -59,8 +59,16 @@ The same workflow also runs:
 
 - On a push to `main`, so code and configuration changes are deployed.
 - Through the **Run workflow** button.
-- On a `repository_dispatch` event named `refresh-dashboard`, reserved for a
-  future event-driven integration.
+- On a `repository_dispatch` event named `refresh-dashboard`. A project's release
+  workflow can send it after a release, so the release train updates within minutes
+  instead of at the next scheduled run:
+
+  ```bash
+  gh api repos/bloxbean/BeanPulse/dispatches -f event_type=refresh-dashboard
+  ```
+
+  The token needs write access to BeanPulse's contents (a fine-grained token with
+  Contents: read and write on BeanPulse only).
 
 ## Repository discovery inbox
 

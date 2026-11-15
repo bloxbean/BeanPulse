@@ -105,5 +105,65 @@
       "description": "Native bindings that bring Cardano Client Lib to non-Java languages.",
       "accent": "#84cc16"
     }
-  ]
+  ],
+  "releaseTrain": {
+    "projects": [
+      {
+        "slug": "cardano-client-lib",
+        "keys": [
+          "cardano-client-lib",
+          "cardanoClientLibVersion"
+        ]
+      },
+      {
+        "slug": "yaci",
+        "branch": "next",
+        "keys": [
+          "yaci"
+        ]
+      },
+      {
+        "slug": "julc",
+        "keys": [
+          "julc",
+          "julcVersion"
+        ]
+      },
+      {
+        "slug": "zeroj",
+        "keys": [
+          "zeroj",
+          "zerojVersion"
+        ]
+      },
+      {
+        "slug": "yaci-store",
+        "keys": [
+          "yaci-store"
+        ]
+      },
+      {
+        "slug": "yano-x",
+        "keys": [
+          "appLedgerFrameworkVersion"
+        ]
+      },
+      {
+        "slug": "yano",
+        "keys": [],
+        "parts": [
+          {
+            "slug": "yano-foundation",
+            "name": "Yano foundation",
+            "note": "node API, host API",
+            "keys": [
+              "yanoVersion",
+              "nodeApiVersion",
+              "hostApiVersion"
+            ]
+          }
+        ]
+      }
+    ]
+  }
 }

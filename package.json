@@ -7,6 +7,6 @@
     "data:refresh": "node scripts/fetch-project-data.mjs",
     "dev": "node scripts/serve.mjs",
     "test": "node --test scripts/*.test.mjs",
-    "verify": "npm test && node --check assets/app.js && node --check scripts/discovery-issue-utils.mjs && node --check scripts/fetch-project-data.mjs && node --check scripts/public-github-preview.mjs && node --check scripts/serve.mjs && node --check scripts/sync-discovery-issue.mjs"
+    "verify": "npm test && node --check assets/app.js && node --check scripts/dependency-data-utils.mjs && node --check scripts/discovery-issue-utils.mjs && node --check scripts/fetch-project-data.mjs && node --check scripts/public-github-preview.mjs && node --check scripts/serve.mjs && node --check scripts/sync-discovery-issue.mjs"
   }
 }
