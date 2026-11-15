@@ -47,10 +47,13 @@ from every configured repository. It:
 - Enriches a bounded number of relevant PRs with reviews and checks.
 - Computes release totals.
 - Merges curated roadmap configuration.
+- Reads the Gradle build files and GitHub releases of the projects in `releaseTrain`
+  and computes the release train (`scripts/dependency-data-utils.mjs`, pure and tested).
 - Writes a single generated JSON snapshot.
 
-The snapshot contains both `catalog` for repository discovery and `projects` for
-the detailed watchlist.
+The snapshot contains `catalog` for repository discovery, `projects` for the
+detailed watchlist and `releaseTrain` for the release train view. When the build
+files cannot be read, the previous release train is kept.
 
 When API access is temporarily unavailable, existing projects keep their cached
 snapshot. A new project can use `scripts/public-github-preview.mjs` to create a

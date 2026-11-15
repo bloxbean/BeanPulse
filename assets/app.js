@@ -45,6 +45,7 @@ const state = {
   catalogSearch: '',
   catalogPage: 1,
   selectedRepositories: new Set(),
+  trainSelected: null,
 }
 
 let data
@@ -62,7 +63,7 @@ function updateRoute(next, push = true) {
   Object.assign(state, next, { search: '', status: 'all', page: 1 })
   const parameters = new URLSearchParams()
   if (state.project) parameters.set('project', state.project)
-  if (state.project && state.view !== 'overview') parameters.set('view', state.view)
+  if ((state.project && state.view !== 'overview') || (!state.project && state.view === 'release-train')) parameters.set('view', state.view)
   if (state.release) parameters.set('release', state.release)
   const url = `${window.location.pathname}${parameters.size ? `?${parameters}` : ''}`
   window.history[push ? 'pushState' : 'replaceState']({}, '', url)
@@ -112,7 +113,7 @@ function render() {
   app.innerHTML = `
     <div class="app-shell">
       ${renderTopbar(project)}
-      <main>${project ? renderProject(project) : renderPortfolio()}</main>
+      <main>${project ? renderProject(project) : state.view === 'release-train' ? renderReleaseTrain() : renderPortfolio()}</main>
       ${renderFooter()}
     </div>`
   bindEvents()
@@ -166,6 +167,8 @@ function renderPortfolio() {
         <div><span>Open issues</span><strong>${totals.issues}</strong></div>
       </div>
     </section>
+
+    ${renderReleaseTrainTeaser()}
 
     <section class="project-picker page-width">
       <div class="section-heading">
@@ -477,6 +480,135 @@ function ciText(item) {
   return ({ success: 'Checks passing', failure: 'Checks failing', pending: 'Checks running', 'not-available': 'Unavailable' })[item.ci.status]
 }
 
+const trainLevels = { current: 'Latest release', behind: 'Needs attention', blocked: 'Blocked' }
+
+function trainCounts(train) {
+  return train.nodes.reduce((counts, node) => ({ ...counts, [node.status.level]: (counts[node.status.level] ?? 0) + 1 }), {})
+}
+
+function renderTrainChips(train) {
+  const counts = trainCounts(train)
+  return `<div class="train-chips">
+    <span data-level="current"><i></i><b>${counts.current ?? 0}</b> ready to release</span>
+    <span data-level="behind"><i></i><b>${counts.behind ?? 0}</b> need attention</span>
+    <span data-level="blocked"><i></i><b>${counts.blocked ?? 0}</b> blocked</span>
+  </div>`
+}
+
+function renderReleaseTrainTeaser() {
+  const train = data.releaseTrain
+  if (!train?.nodes?.length) return ''
+  return `
+    <section class="train-teaser page-width">
+      <div class="section-heading">
+        <div><span class="section-kicker">Release train</span><h2>What can be released, and in what order</h2></div>
+        <p>Which project uses which version of which, read from each repository's Gradle build files.</p>
+      </div>
+      <div class="train-teaser-body">
+        ${renderTrainChips(train)}
+        <button data-release-train type="button">Open release train ${icon('arrow', 16)}</button>
+      </div>
+    </section>`
+}
+
+function renderReleaseTrain() {
+  const train = data.releaseTrain
+  if (!train?.nodes?.length) {
+    return `<section class="page-width train-page"><div class="empty-state"><strong>No release train yet</strong><span>Add a <code>releaseTrain</code> section to config/projects.json and refresh the snapshot.</span></div></section>`
+  }
+  const selected = train.nodes.find((node) => node.slug === state.trainSelected)
+    ?? train.nodes.reduce((last, node) => (node.step > last.step ? node : last))
+  const nameOf = (slug) => train.nodes.find((node) => node.slug === slug)?.name ?? slug
+  const pinRow = (pin, other) => `<li><i data-level="${pin.status.level}"></i><div><strong>${escapeHtml(nameOf(other))}</strong> <code>${escapeHtml(pin.version)}</code> <span class="train-pill" data-level="${pin.status.level}">${escapeHtml(pin.status.text)}</span><small>${escapeHtml(pin.sources.join(', '))}</small></div></li>`
+  const uses = train.pins.filter((pin) => pin.to === selected.slug)
+  const usedBy = train.pins.filter((pin) => pin.from === selected.slug)
+  const order = new Map(train.nodes.map((node, index) => [node.slug, node.step * 100 + index]))
+  return `
+    <section class="page-width train-page">
+      <button class="back-link train-back" data-home type="button">${icon('back', 16)} All projects</button>
+      <div class="section-heading">
+        <div><span class="section-kicker">Release train</span><h2>What can be released, and in what order</h2></div>
+        <p>Columns are release steps: a project can be released once everything to its left that it uses is released. Arrows read "is used by". Read ${relativeDate(train.generatedAt)} from each project's <code>gradle.properties</code> and <code>gradle/libs.versions.toml</code>.</p>
+      </div>
+      ${renderTrainChips(train)}
+      <div class="train-legend">
+        <span><i data-level="current"></i>Pins the latest release</span>
+        <span><i data-level="behind"></i>Behind the latest release</span>
+        <span><i data-level="blocked"></i>Snapshot or unreleased build: blocks a release</span>
+        <span>Select a box for the versions it uses; hover an arrow for its pin.</span>
+      </div>
+      <div class="train-diagram">${trainDiagram(train, selected.slug)}</div>
+      <div class="train-columns">
+        <div>
+          <h3>What blocks a release</h3>
+          <ul class="train-flags">${train.flags.map((flag) => `<li><i data-level="${flag.level}"></i><div><strong>${escapeHtml(flag.title)}</strong><p>${escapeHtml(flag.detail)}</p></div></li>`).join('')}</ul>
+        </div>
+        <div class="train-detail">
+          <h3>${escapeHtml(selected.name)} <code>${escapeHtml(selected.version ?? '')}</code></h3>
+          <p>Branch <code>${escapeHtml(selected.branch)}</code> · last release ${escapeHtml(selected.latestRelease ?? 'none')} · <span class="train-pill" data-level="${selected.status.level}">${escapeHtml(selected.status.text)}</span></p>
+          <h4>Uses</h4><ul>${uses.length ? uses.map((pin) => pinRow(pin, pin.from)).join('') : '<li class="none">No pins on other tracked projects.</li>'}</ul>
+          <h4>Used by</h4><ul>${usedBy.length ? usedBy.map((pin) => pinRow(pin, pin.to)).join('') : '<li class="none">Not used by another tracked project.</li>'}</ul>
+          <button data-project="${escapeHtml(selected.project)}" type="button">Open ${escapeHtml(data.projects.find((project) => project.slug === selected.project)?.name ?? selected.project)} ${icon('arrow', 16)}</button>
+        </div>
+      </div>
+      <h3 class="train-table-title">All pins</h3>
+      <div class="train-table"><table>
+        <thead><tr><th>Project</th><th>Uses</th><th>Pinned</th><th>Latest release</th><th>Status</th><th>Declared in</th></tr></thead>
+        <tbody>${train.pins.slice().sort((left, right) => order.get(left.to) - order.get(right.to) || order.get(left.from) - order.get(right.from)).map((pin) => `
+          <tr><td>${escapeHtml(nameOf(pin.to))}</td><td>${escapeHtml(nameOf(pin.from))}</td><td><code>${escapeHtml(pin.version)}</code></td><td><code>${escapeHtml(pin.status.latest ?? train.nodes.find((node) => node.slug === pin.from)?.latestRelease ?? '—')}</code></td><td><span class="train-pill" data-level="${pin.status.level}">${escapeHtml(pin.status.text)}</span></td><td><code>${escapeHtml(pin.sources.join(', '))}</code></td></tr>`).join('')}
+        </tbody>
+      </table></div>
+    </section>`
+}
+
+// One column per release step; arrows run from the project used to the project that uses it.
+function trainDiagram(train, selected) {
+  const width = 200, height = 86, columnWidth = 266, rowHeight = 120, padX = 24, padY = 50
+  const columns = new Map()
+  for (const node of train.nodes) columns.set(node.step, [...(columns.get(node.step) ?? []), node])
+  const steps = [...columns.keys()].sort((left, right) => left - right)
+  const maxRows = Math.max(...[...columns.values()].map((nodes) => nodes.length))
+  const place = new Map()
+  steps.forEach((step, column) => columns.get(step).forEach((node, row) => {
+    const offset = (maxRows - columns.get(step).length) * rowHeight / 2
+    place.set(node.slug, { x: padX + column * columnWidth, y: padY + offset + row * rowHeight })
+  }))
+  const svgWidth = padX * 2 + (steps.length - 1) * columnWidth + width
+  const svgHeight = padY + maxRows * rowHeight
+  const ports = (list, slug, key) => list.sort((left, right) => place.get(left[key]).y - place.get(right[key]).y)
+  const into = new Map(), out = new Map()
+  for (const pin of train.pins) {
+    into.set(pin.to, [...(into.get(pin.to) ?? []), pin])
+    out.set(pin.from, [...(out.get(pin.from) ?? []), pin])
+  }
+  into.forEach((list, slug) => ports(list, slug, 'from'))
+  out.forEach((list, slug) => ports(list, slug, 'to'))
+  const portY = (list, pin, y) => y + 14 + (height - 28) * (list.length === 1 ? 0.5 : list.indexOf(pin) / (list.length - 1))
+  const rails = steps.map((step, column) => `<rect class="rail" x="${padX + column * columnWidth - 10}" y="8" width="${width + 20}" height="${svgHeight - 16}" rx="10"/><text class="rail-label" x="${padX + column * columnWidth + width / 2}" y="31" text-anchor="middle">STEP ${step}</text>`).join('')
+  let edges = ''
+  for (const pin of train.pins) {
+    const from = place.get(pin.from), to = place.get(pin.to)
+    if (!from || !to) continue
+    const x1 = from.x + width, y1 = portY(out.get(pin.from), pin, from.y), x2 = to.x - 6, y2 = portY(into.get(pin.to), pin, to.y)
+    const bend = Math.max(40, (x2 - x1) / 2)
+    const dim = selected && pin.from !== selected && pin.to !== selected ? ' dim' : ''
+    edges += `<path class="edge${dim}" data-level="${pin.status.level}" d="M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2},${y2}" marker-end="url(#train-arrow-${pin.status.level})"><title>${escapeHtml(`${pin.to} uses ${pin.from} ${pin.version} (${pin.status.text}), ${pin.sources.join(', ')}`)}</title></path>`
+  }
+  const markers = ['current', 'behind', 'blocked'].map((level) => `<marker id="train-arrow-${level}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path data-level="${level}" d="M0,0 L10,5 L0,10 z"/></marker>`).join('')
+  const boxes = train.nodes.map((node) => {
+    const { x, y } = place.get(node.slug)
+    return `<g class="train-node${node.slug === selected ? ' selected' : ''}" data-train-node="${escapeHtml(node.slug)}" tabindex="0" role="button" aria-label="${escapeHtml(`${node.name}, ${node.status.text}`)}">
+      <rect class="box" x="${x}" y="${y}" width="${width}" height="${height}" rx="9"/>
+      <rect class="stripe" data-level="${node.status.level}" x="${x}" y="${y + 10}" width="4" height="${height - 20}" rx="2"/>
+      <text class="name" x="${x + 14}" y="${y + 22}">${escapeHtml(node.name)}</text>
+      <text class="version" x="${x + 14}" y="${y + 42}">${escapeHtml(node.version ?? 'no version')}</text>
+      <text class="meta" x="${x + 14}" y="${y + 59}">${node.note ? escapeHtml(node.note) : `last release ${escapeHtml(node.latestRelease ?? 'none')} · ${escapeHtml(node.branch)}`}</text>
+      <text class="state" data-level="${node.status.level}" x="${x + 14}" y="${y + 76}">${escapeHtml(node.status.text)}</text>
+    </g>`
+  }).join('')
+  return `<svg role="img" aria-label="Release train: projects by release step and the versions they pin" viewBox="0 0 ${svgWidth} ${svgHeight}" style="width:100%;min-width:${Math.round(svgWidth * 0.72)}px;height:auto"><defs>${markers}</defs>${rails}${edges}${boxes}</svg>`
+}
+
 function renderFooter() {
   return `<footer class="footer page-width"><span><b>BeanPulse</b> · Bloxbean delivery intelligence</span><span>Data from GitHub · Snapshot ${longDate(data.generatedAt)}</span><a href="https://github.com/bloxbean/BeanPulse" target="_blank" rel="noreferrer">Source ${icon('external', 12)}</a></footer>`
 }
@@ -486,6 +618,12 @@ function bindEvents() {
   document.querySelectorAll('[data-project]').forEach((button) => button.addEventListener('click', () => updateRoute({ project: button.dataset.project, view: 'overview', release: null })))
   document.querySelector('[data-project-select]')?.addEventListener('change', (event) => updateRoute({ project: event.target.value, view: 'overview', release: null }))
   document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => updateRoute({ view: button.dataset.view, release: null })))
+  document.querySelector('[data-release-train]')?.addEventListener('click', () => updateRoute({ project: null, view: 'release-train', release: null }))
+  document.querySelectorAll('[data-train-node]').forEach((node) => {
+    const select = () => { state.trainSelected = node.dataset.trainNode; render() }
+    node.addEventListener('click', select)
+    node.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select() } })
+  })
   document.querySelectorAll('[data-release]').forEach((button) => button.addEventListener('click', () => updateRoute({ view: 'releases', release: button.dataset.release })))
   document.querySelector('[data-release-back]')?.addEventListener('click', () => updateRoute({ view: 'releases', release: null }))
   document.querySelector('[data-refresh]')?.addEventListener('click', async (event) => {

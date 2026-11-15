@@ -17,6 +17,8 @@ choose which projects should receive full tracking.
 - Release grouping from version labels, milestones, and `release/*` branches.
 - A dedicated **Unassigned** lane for work without a release version.
 - Product-outcome roadmaps with links to the implementing PRs and issues.
+- A **Release train** view: which project uses which version of which, read from Gradle build files, the order
+  the next releases have to go in, and what blocks each one (snapshot or unreleased pins, unbumped versions).
 - Search, status filters, progress totals, review state, and CI state.
 - Twice-daily, manual, and on-change GitHub Pages refreshes.
 - A static site with no database, runtime service, or browser-side secret.
