@@ -480,7 +480,9 @@ function ciText(item) {
   return ({ success: 'Checks passing', failure: 'Checks failing', pending: 'Checks running', 'not-available': 'Unavailable' })[item.ci.status]
 }
 
-const trainLevels = { current: 'Latest release', behind: 'Needs attention', blocked: 'Blocked' }
+function trainName(train, slug) {
+  return train.nodes.find((node) => node.slug === slug)?.name ?? slug
+}
 
 function trainCounts(train) {
   return train.nodes.reduce((counts, node) => ({ ...counts, [node.status.level]: (counts[node.status.level] ?? 0) + 1 }), {})
@@ -514,11 +516,11 @@ function renderReleaseTrainTeaser() {
 function renderReleaseTrain() {
   const train = data.releaseTrain
   if (!train?.nodes?.length) {
-    return `<section class="page-width train-page"><div class="empty-state"><strong>No release train yet</strong><span>Add a <code>releaseTrain</code> section to config/projects.json and refresh the snapshot.</span></div></section>`
+    return `<section class="page-width train-page"><div class="empty-state"><strong>The release train is not in this snapshot</strong><span>GitHub could not be read when it was built. It returns with the next refresh.</span></div></section>`
   }
   const selected = train.nodes.find((node) => node.slug === state.trainSelected)
     ?? train.nodes.reduce((last, node) => (node.step > last.step ? node : last))
-  const nameOf = (slug) => train.nodes.find((node) => node.slug === slug)?.name ?? slug
+  const nameOf = (slug) => trainName(train, slug)
   const pinRow = (pin, other) => `<li><i data-level="${pin.status.level}"></i><div><strong>${escapeHtml(nameOf(other))}</strong> <code>${escapeHtml(pin.version)}</code> <span class="train-pill" data-level="${pin.status.level}">${escapeHtml(pin.status.text)}</span><small>${escapeHtml(pin.sources.join(', '))}</small></div></li>`
   const uses = train.pins.filter((pin) => pin.to === selected.slug)
   const usedBy = train.pins.filter((pin) => pin.from === selected.slug)
@@ -575,14 +577,14 @@ function trainDiagram(train, selected) {
   }))
   const svgWidth = padX * 2 + (steps.length - 1) * columnWidth + width
   const svgHeight = padY + maxRows * rowHeight
-  const ports = (list, slug, key) => list.sort((left, right) => place.get(left[key]).y - place.get(right[key]).y)
+  const ports = (list, key) => list.sort((left, right) => place.get(left[key]).y - place.get(right[key]).y)
   const into = new Map(), out = new Map()
   for (const pin of train.pins) {
     into.set(pin.to, [...(into.get(pin.to) ?? []), pin])
     out.set(pin.from, [...(out.get(pin.from) ?? []), pin])
   }
-  into.forEach((list, slug) => ports(list, slug, 'from'))
-  out.forEach((list, slug) => ports(list, slug, 'to'))
+  into.forEach((list) => ports(list, 'from'))
+  out.forEach((list) => ports(list, 'to'))
   const portY = (list, pin, y) => y + 14 + (height - 28) * (list.length === 1 ? 0.5 : list.indexOf(pin) / (list.length - 1))
   const rails = steps.map((step, column) => `<rect class="rail" x="${padX + column * columnWidth - 10}" y="8" width="${width + 20}" height="${svgHeight - 16}" rx="10"/><text class="rail-label" x="${padX + column * columnWidth + width / 2}" y="31" text-anchor="middle">STEP ${step}</text>`).join('')
   let edges = ''
@@ -592,12 +594,12 @@ function trainDiagram(train, selected) {
     const x1 = from.x + width, y1 = portY(out.get(pin.from), pin, from.y), x2 = to.x - 6, y2 = portY(into.get(pin.to), pin, to.y)
     const bend = Math.max(40, (x2 - x1) / 2)
     const dim = selected && pin.from !== selected && pin.to !== selected ? ' dim' : ''
-    edges += `<path class="edge${dim}" data-level="${pin.status.level}" d="M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2},${y2}" marker-end="url(#train-arrow-${pin.status.level})"><title>${escapeHtml(`${pin.to} uses ${pin.from} ${pin.version} (${pin.status.text}), ${pin.sources.join(', ')}`)}</title></path>`
+    edges += `<path class="edge${dim}" data-level="${pin.status.level}" d="M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2},${y2}" marker-end="url(#train-arrow-${pin.status.level})"><title>${escapeHtml(`${trainName(train, pin.to)} uses ${trainName(train, pin.from)} ${pin.version} (${pin.status.text}), ${pin.sources.join(', ')}`)}</title></path>`
   }
   const markers = ['current', 'behind', 'blocked'].map((level) => `<marker id="train-arrow-${level}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path data-level="${level}" d="M0,0 L10,5 L0,10 z"/></marker>`).join('')
   const boxes = train.nodes.map((node) => {
     const { x, y } = place.get(node.slug)
-    return `<g class="train-node${node.slug === selected ? ' selected' : ''}" data-train-node="${escapeHtml(node.slug)}" tabindex="0" role="button" aria-label="${escapeHtml(`${node.name}, ${node.status.text}`)}">
+    return `<g class="train-node${node.slug === selected ? ' selected' : ''}" data-train-node="${escapeHtml(node.slug)}" tabindex="0" role="button" aria-pressed="${node.slug === selected}" aria-label="${escapeHtml(`${node.name}, ${node.status.text}`)}">
       <rect class="box" x="${x}" y="${y}" width="${width}" height="${height}" rx="9"/>
       <rect class="stripe" data-level="${node.status.level}" x="${x}" y="${y + 10}" width="4" height="${height - 20}" rx="2"/>
       <text class="name" x="${x + 14}" y="${y + 22}">${escapeHtml(node.name)}</text>
@@ -606,7 +608,7 @@ function trainDiagram(train, selected) {
       <text class="state" data-level="${node.status.level}" x="${x + 14}" y="${y + 76}">${escapeHtml(node.status.text)}</text>
     </g>`
   }).join('')
-  return `<svg role="img" aria-label="Release train: projects by release step and the versions they pin" viewBox="0 0 ${svgWidth} ${svgHeight}" style="width:100%;min-width:${Math.round(svgWidth * 0.72)}px;height:auto"><defs>${markers}</defs>${rails}${edges}${boxes}</svg>`
+  return `<svg role="group" aria-label="Release train: projects by release step and the versions they pin" viewBox="0 0 ${svgWidth} ${svgHeight}" style="width:100%;min-width:${Math.round(svgWidth * 0.72)}px;height:auto"><defs>${markers}</defs>${rails}${edges}${boxes}</svg>`
 }
 
 function renderFooter() {
@@ -614,13 +616,22 @@ function renderFooter() {
 }
 
 function bindEvents() {
+  const trainFrame = document.querySelector('.train-diagram'), trainSelected = document.querySelector('.train-node.selected')
+  if (trainFrame && trainSelected) {
+    const frame = trainFrame.getBoundingClientRect(), box = trainSelected.getBoundingClientRect()
+    trainFrame.scrollLeft += box.left - frame.left - (frame.width - box.width) / 2
+  }
   document.querySelectorAll('[data-home]').forEach((button) => button.addEventListener('click', () => updateRoute({ project: null, view: 'overview', release: null })))
   document.querySelectorAll('[data-project]').forEach((button) => button.addEventListener('click', () => updateRoute({ project: button.dataset.project, view: 'overview', release: null })))
   document.querySelector('[data-project-select]')?.addEventListener('change', (event) => updateRoute({ project: event.target.value, view: 'overview', release: null }))
   document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => updateRoute({ view: button.dataset.view, release: null })))
   document.querySelector('[data-release-train]')?.addEventListener('click', () => updateRoute({ project: null, view: 'release-train', release: null }))
   document.querySelectorAll('[data-train-node]').forEach((node) => {
-    const select = () => { state.trainSelected = node.dataset.trainNode; render() }
+    const select = () => {
+      state.trainSelected = node.dataset.trainNode
+      render()
+      document.querySelector(`[data-train-node="${CSS.escape(state.trainSelected)}"]`)?.focus()
+    }
     node.addEventListener('click', select)
     node.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select() } })
   })

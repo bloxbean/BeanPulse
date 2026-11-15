@@ -10,7 +10,7 @@ import {
   reviewSummary,
 } from './release-data-utils.mjs'
 import { collectPublicPreview } from './public-github-preview.mjs'
-import { BUILD_FILES, buildReleaseTrain, readBuildFile, releaseNames } from './dependency-data-utils.mjs'
+import { BUILD_FILES, buildReleaseTrain, checkReleaseTrainConfig, readBuildFile, releaseNames } from './dependency-data-utils.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const config = JSON.parse(await readFile(path.join(root, 'config/projects.json'), 'utf8'))
@@ -19,6 +19,7 @@ const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || ''
 const apiRoot = process.env.GITHUB_API_URL || 'https://api.github.com'
 const detailLimit = Number(process.env.PR_DETAIL_LIMIT || (token ? 100 : 8))
 const discovery = config.discovery ?? {}
+checkReleaseTrainConfig(config.releaseTrain, config.projects)
 
 const headers = {
   Accept: 'application/vnd.github+json',
@@ -31,7 +32,7 @@ async function github(endpoint) {
   const response = await fetch(`${apiRoot}${endpoint}`, { headers })
   if (!response.ok) {
     const remaining = response.headers.get('x-ratelimit-remaining')
-    throw new Error(`GitHub API ${response.status} for ${endpoint}${remaining === '0' ? ' (rate limit reached)' : ''}`)
+    throw Object.assign(new Error(`GitHub API ${response.status} for ${endpoint}${remaining === '0' ? ' (rate limit reached)' : ''}`), { status: response.status })
   }
   return response.json()
 }
@@ -176,6 +177,7 @@ async function collectProject(project) {
     ...project,
     repositoryUrl: repositoryInfo.html_url,
     homepage: repositoryInfo.homepage,
+    defaultBranch: repositoryInfo.default_branch,
     language: repositoryInfo.language,
     stars: repositoryInfo.stargazers_count,
     lastPushedAt: repositoryInfo.pushed_at,
@@ -187,28 +189,27 @@ async function collectProject(project) {
   }
 }
 
+// gradle.properties must exist (it holds the project's own version); a version catalog is optional.
 async function buildFile(repository, branch, file) {
   try {
     const content = await github(`/repos/${repository}/contents/${file}?ref=${encodeURIComponent(branch)}`)
     return Buffer.from(content.content ?? '', 'base64').toString('utf8')
   } catch (error) {
-    if (error.message.includes(' 404 ')) return ''
+    if (error.status === 404 && file !== 'gradle.properties') return ''
     throw error
   }
 }
 
 // The release train (config `releaseTrain`): each listed project's own version and its pins on the others, from
 // its Gradle build files on its default branch (or the configured one), and its GitHub releases.
-async function collectReleaseTrain() {
+async function collectReleaseTrain(collected) {
   const entries = config.releaseTrain?.projects ?? []
   if (!entries.length) return null
   const projects = []
   for (const entry of entries) {
-    const project = config.projects.find((candidate) => candidate.slug === entry.slug)
-    if (!project) throw new Error(`releaseTrain names ${entry.slug}, which is not a watched project`)
+    const project = collected.find((candidate) => candidate.slug === entry.slug)
     console.log(`Reading build files of ${project.repository}…`)
-    const repository = await github(`/repos/${project.repository}`)
-    const branch = entry.branch ?? repository.default_branch
+    const branch = entry.branch ?? project.defaultBranch ?? (await github(`/repos/${project.repository}`)).default_branch
     const files = await Promise.all(BUILD_FILES.map((file) => buildFile(project.repository, branch, file)))
     projects.push({
       slug: project.slug,
@@ -218,7 +219,7 @@ async function collectReleaseTrain() {
       keys: entry.keys ?? [],
       parts: entry.parts ?? [],
       entries: files.flatMap((text, index) => readBuildFile(text, BUILD_FILES[index])),
-      releases: releaseNames(await github(`/repos/${project.repository}/releases?per_page=100`)),
+      releases: releaseNames(await paginate(`/repos/${project.repository}/releases`, 5)),
     })
   }
   return { generatedAt: new Date().toISOString(), ...buildReleaseTrain(projects) }
@@ -312,7 +313,7 @@ for (const project of config.projects) {
 
 let releaseTrain
 try {
-  releaseTrain = await collectReleaseTrain()
+  releaseTrain = await collectReleaseTrain(projects)
 } catch (error) {
   console.warn(`${error.message}. Keeping the existing release train.`)
   releaseTrain = cachedReleaseTrain

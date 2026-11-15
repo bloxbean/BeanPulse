@@ -87,8 +87,8 @@ GitHub releases.
     { "slug": "cardano-client-lib", "keys": ["cardano-client-lib", "cardanoClientLibVersion"] },
     { "slug": "yaci", "branch": "next", "keys": ["yaci"] },
     { "slug": "yano", "keys": [], "parts": [
-      { "slug": "yano-foundation", "name": "Yano foundation", "note": "node API, host API",
-        "keys": ["yanoVersion", "nodeApiVersion", "hostApiVersion"] }
+      { "slug": "yano-foundation", "name": "Yano foundation", "note": "node API",
+        "keys": ["yanoVersion", "nodeApiVersion"] }
     ] }
   ]
 }
@@ -99,7 +99,17 @@ GitHub releases.
 | `slug` | A watched project from `projects`. |
 | `branch` | Optional. The branch whose build files count, when it is not the default branch. |
 | `keys` | The names other projects use to pin this project: a `gradle.properties` key, a `[versions]` key, or the artifact name in a `group:artifact:version` coordinate. |
-| `parts` | Optional. Artifacts the project publishes on their own, such as its APIs, used by a project that the main project itself uses. A pin on a part's keys points at the part, which breaks what would otherwise be a cycle. |
+| `parts` | Optional. Artifacts the project publishes on their own, such as its APIs, used by a project that the main project itself uses. A pin on a part's keys points at the part, which breaks what would otherwise be a cycle. A part shares its project's version and GitHub releases, so leave out an artifact with its own version scheme. |
+
+A slug or key used twice, or a slug that is not a watched project, fails the
+refresh. `gradle.properties` must exist on the branch; the version catalog is
+optional. Pins are read from:
+
+- `gradle.properties`: every `key = value`.
+- `gradle/libs.versions.toml`: `[versions]` entries (`key = "1.0"`), and
+  `[libraries]` entries written as `key = "group:artifact:1.0"` or
+  `key = { module = "group:artifact", version = "1.0" }`, where the artifact name
+  also matches a key. Other sections and `version.ref` entries name no version.
 
 How a pin is judged:
 

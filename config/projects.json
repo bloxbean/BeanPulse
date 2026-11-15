@@ -155,11 +155,10 @@
           {
             "slug": "yano-foundation",
             "name": "Yano foundation",
-            "note": "node API, host API",
+            "note": "node API",
             "keys": [
               "yanoVersion",
-              "nodeApiVersion",
-              "hostApiVersion"
+              "nodeApiVersion"
             ]
           }
         ]

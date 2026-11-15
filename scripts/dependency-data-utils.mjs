@@ -1,27 +1,42 @@
 // Release train: which tracked project pins which version of which, read from Gradle build files.
 // Pure functions only; scripts/fetch-project-data.mjs does the fetching.
+import { isVersionName } from './release-data-utils.mjs'
 
 export const BUILD_FILES = ['gradle.properties', 'gradle/libs.versions.toml']
 
-const COORDINATE = /^[\w.-]+:([\w.-]+):([^:\s]+)$/
 const REHEARSAL = /-dev\d*$/
+const QUOTED = `["']([^"']*)["']`
+const VERSIONS_ENTRY = new RegExp(`^\\s*([\\w.-]+)\\s*=\\s*${QUOTED}`)
+const LIBRARY_COORDINATE = /^\s*([\w.-]+)\s*=\s*["'][\w.-]+:([\w.-]+):([^:"'@]+)(?:@\w+)?["']/
+const LIBRARY_INLINE = new RegExp(`^\\s*([\\w.-]+)\\s*=\\s*\\{.*\\bmodule\\s*=\\s*["'][\\w.-]+:([\\w.-]+)["'].*\\bversion\\s*=\\s*${QUOTED}`)
 
-// Every `key = value` in gradle.properties, and every `key = "value"` in a TOML file. A Maven coordinate value
-// (`group:artifact:version`) is read as its version, and its artifact name also counts as a key.
+// Pins in a build file:
+// - gradle.properties: every `key = value`;
+// - libs.versions.toml: `[versions]` entries (`key = "1.0"`), and `[libraries]` entries written as a coordinate
+//   (`key = "group:artifact:1.0"`) or inline (`key = { module = "group:artifact", version = "1.0" }`), whose artifact
+//   name also counts as a key. Other sections, and `version.ref` entries, name no version.
 export function readBuildFile(text, file) {
   const toml = file.endsWith('.toml')
   const entries = []
+  let section = null
   String(text ?? '').split(/\r?\n/).forEach((line, index) => {
     if (/^\s*[#!]/.test(line)) return
-    const match = toml ? line.match(/^\s*([\w.-]+)\s*=\s*"([^"]*)"/) : line.match(/^\s*([\w.-]+)\s*[=:]\s*(\S.*?)\s*$/)
-    if (!match) return
-    const coordinate = match[2].match(COORDINATE)
-    entries.push({
-      key: match[1],
-      artifact: coordinate?.[1] ?? null,
-      value: coordinate ? coordinate[2] : match[2],
-      source: `${file}:${index + 1}`,
-    })
+    const source = `${file}:${index + 1}`
+    if (!toml) {
+      const match = line.match(/^\s*([\w.-]+)\s*[=:]\s*(\S.*?)\s*$/)
+      if (match) entries.push({ key: match[1], artifact: null, value: match[2], source })
+      return
+    }
+    const header = line.match(/^\s*\[([\w.-]+)\]/)
+    if (header) {
+      section = header[1]
+    } else if (section === 'versions') {
+      const match = line.match(VERSIONS_ENTRY)
+      if (match) entries.push({ key: match[1], artifact: null, value: match[2], source })
+    } else if (section === 'libraries') {
+      const match = line.match(LIBRARY_COORDINATE) ?? line.match(LIBRARY_INLINE)
+      if (match) entries.push({ key: match[1], artifact: match[2], value: match[3], source })
+    }
   })
   return entries
 }
@@ -36,9 +51,9 @@ const releaseLine = (version) => version.replace(/^v/, '').split('-')[0].split('
 // Release tags newest first (GitHub's order), without drafts and release rehearsals.
 export function releaseNames(releases) {
   return (releases ?? [])
-    .filter((release) => !release.draft)
-    .map((release) => String(release.tag_name ?? release.name ?? '').replace(/^v/, ''))
-    .filter((name) => /^\d+\.\d+\./.test(name) && !REHEARSAL.test(name))
+    .filter((release) => !release.draft && isVersionName(release.tag_name))
+    .map((release) => release.tag_name.replace(/^v/, ''))
+    .filter((name) => !REHEARSAL.test(name))
 }
 
 // A pin is current when it is the newest release of its line (major.minor), behind when it is an older release,
@@ -56,8 +71,8 @@ export function pinStatus(version, releases) {
 // Nodes, pins, release steps and flags for the tracked projects.
 // `projects`: [{ slug, name, repository, branch, keys, parts, entries, releases }] where `entries` come from
 // readBuildFile and `releases` from releaseNames. A part ({ slug, name, note, keys }) is an artifact set a project
-// publishes on its own (for example its APIs): pins on the part's keys point at the part, which takes the project's
-// version and its pins, except pins on the projects that use the part.
+// publishes on its own (for example its APIs): pins on the part's keys point at the part. A part shares its project's
+// version and releases, and takes the project's pins except pins on the projects that use the part.
 export function buildReleaseTrain(projects) {
   const nodes = []
   const keyOwner = new Map()
@@ -79,9 +94,8 @@ export function buildReleaseTrain(projects) {
       const target = keyOwner.get(entry.key) ?? (entry.artifact && keyOwner.get(entry.artifact))
       if (!target || node.get(target).project === project.slug) continue
       const id = `${target}@${entry.value}`
-      const pin = byTarget.get(id) ?? { from: target, to: project.slug, version: entry.value, keys: [], sources: [] }
-      pin.keys.push(entry.key)
-      pin.sources.push(entry.source)
+      const pin = byTarget.get(id) ?? { from: target, to: project.slug, version: entry.value, sources: [] }
+      pin.sources.push(`${entry.source} (${entry.key})`)
       byTarget.set(id, pin)
     }
     pins.push(...byTarget.values())
@@ -93,18 +107,18 @@ export function buildReleaseTrain(projects) {
     }
   }
   for (const pin of pins) pin.status = pinStatus(pin.version, node.get(pin.from).releases)
+  const uses = new Map(nodes.map((item) => [item.slug, pins.filter((pin) => pin.to === item.slug)]))
 
-  // Release steps: the longest chain of pins below a node. An edge that closes a cycle is reported and not followed.
+  // Release steps: the longest chain of pins below a node. A pin that closes a cycle is kept aside and not followed.
   const cycles = []
   const step = new Map()
   const visiting = new Set()
-  const uses = (slug) => pins.filter((pin) => pin.to === slug)
   const depth = (slug) => {
     if (step.has(slug)) return step.get(slug)
     visiting.add(slug)
     let value = 0
-    for (const pin of uses(slug)) {
-      if (visiting.has(pin.from)) { cycles.push([pin.from, slug]); continue }
+    for (const pin of uses.get(slug)) {
+      if (visiting.has(pin.from)) { cycles.push(pin); continue }
       value = Math.max(value, depth(pin.from) + 1)
     }
     visiting.delete(slug)
@@ -113,40 +127,51 @@ export function buildReleaseTrain(projects) {
   }
   nodes.forEach((item) => depth(item.slug))
 
+  const name = (slug) => node.get(slug)?.name ?? slug
+  const flags = cycles
+    .filter((pin) => pin.status.level === 'blocked')
+    .map((pin) => ({
+      level: 'blocked',
+      title: `${name(pin.to)} and ${name(pin.from)} are in a cycle of pins`,
+      detail: `${name(pin.to)} pins ${name(pin.from)} ${pin.version}, which itself depends on ${name(pin.to)}. Release them in a fixed order, or declare the shared artifacts as a part in config/projects.json.`,
+    }))
   for (const item of nodes) {
-    const blocked = uses(item.slug).filter((pin) => pin.status.level === 'blocked')
-    const behind = uses(item.slug).filter((pin) => pin.status.level === 'behind')
-    const released = item.slug === item.project && item.version && item.releases.includes(item.version)
+    const blocked = uses.get(item.slug).filter((pin) => pin.status.level === 'blocked')
+    const behind = uses.get(item.slug).filter((pin) => pin.status.level === 'behind')
     item.step = step.get(item.slug) + 1
-    item.versionReleased = Boolean(released)
     item.latestRelease = item.releases[0] ?? null
-    item.status = blocked.length ? { level: 'blocked', text: `Blocked by ${blocked.length} unreleased pin${blocked.length > 1 ? 's' : ''}` }
-      : released ? { level: 'behind', text: 'Version not bumped after release' }
-        : behind.length ? { level: 'behind', text: `${behind.length} pin${behind.length > 1 ? 's' : ''} behind` }
-          : { level: 'current', text: 'Ready to release' }
+    item.versionReleased = item.slug === item.project && item.releases.includes(item.version)
+    item.status = !item.version ? { level: 'blocked', text: 'No version found' }
+      : blocked.length ? { level: 'blocked', text: `Blocked by ${blocked.length} unreleased pin${blocked.length > 1 ? 's' : ''}` }
+        : item.versionReleased ? { level: 'behind', text: 'Version already released' }
+          : behind.length ? { level: 'behind', text: `${behind.length} pin${behind.length > 1 ? 's' : ''} behind` }
+            : { level: 'current', text: 'Ready to release' }
     delete item.releases
-  }
-
-  return { nodes, pins, cycles, flags: flags(nodes, pins, cycles) }
-}
-
-function flags(nodes, pins, cycles) {
-  const name = (slug) => nodes.find((item) => item.slug === slug)?.name ?? slug
-  const list = (items) => items.map((pin) => `${name(pin.from)} ${pin.version}`).join(', ')
-  const result = cycles.map(([from, to]) => ({
-    level: 'blocked',
-    title: `${name(from)} and ${name(to)} pin each other`,
-    detail: `Neither can be released first. Split the shared artifacts into a part in config/projects.json, or release them in a fixed order.`,
-  }))
-  for (const item of nodes) {
-    const blocked = pins.filter((pin) => pin.to === item.slug && pin.status.level === 'blocked')
-    const behind = pins.filter((pin) => pin.to === item.slug && pin.status.level === 'behind')
-    if (blocked.length) result.push({ level: 'blocked', title: `${item.name} pins unreleased builds`, detail: `${list(blocked)}. Release them first, then update the pins.` })
-    if (item.versionReleased) result.push({ level: 'behind', title: `${item.name} has not bumped its version`, detail: `${item.version} is already released; the next release needs a new version.` })
-    if (behind.length) result.push({ level: 'behind', title: `${item.name} uses older releases`, detail: behind.map((pin) => `${name(pin.from)} ${pin.version} (latest ${pin.status.latest})`).join(', ') + '.' })
+    if (!item.version) flags.push({ level: 'blocked', title: `${item.name} has no version`, detail: `No version key in gradle.properties on ${item.branch}.` })
+    if (blocked.length) flags.push({ level: 'blocked', title: `${item.name} pins unreleased builds`, detail: `${blocked.map((pin) => `${name(pin.from)} ${pin.version}`).join(', ')}. Release them first, then update the pins.` })
+    if (item.versionReleased) flags.push({ level: 'behind', title: `${item.name} has not bumped its version`, detail: `${item.version} is already released; the next release needs a new version.` })
+    if (behind.length) flags.push({ level: 'behind', title: `${item.name} uses older releases`, detail: `${behind.map((pin) => `${name(pin.from)} ${pin.version} (latest ${pin.status.latest})`).join(', ')}.` })
   }
   const ready = nodes.filter((item) => item.status.level === 'current')
-  if (ready.length) result.push({ level: 'current', title: `${ready.map((item) => item.name).join(', ')} can be released now`, detail: 'Every pin is the latest release of its line.' })
+  if (ready.length) flags.push({ level: 'current', title: `${ready.map((item) => item.name).join(', ')} can be released now`, detail: 'Every pin is the latest release of its line.' })
   const order = { blocked: 0, behind: 1, current: 2 }
-  return result.sort((left, right) => order[left.level] - order[right.level])
+  return { nodes, pins, flags: flags.sort((left, right) => order[left.level] - order[right.level]) }
+}
+
+// Rejects a release train config that cannot be read unambiguously.
+export function checkReleaseTrainConfig(releaseTrain, watched) {
+  const slugs = new Set(watched.map((project) => project.slug))
+  const seen = new Set()
+  const keys = new Set()
+  for (const entry of releaseTrain?.projects ?? []) {
+    if (!slugs.has(entry.slug)) throw new Error(`releaseTrain names ${entry.slug}, which is not a watched project`)
+    for (const item of [entry, ...(entry.parts ?? [])]) {
+      if (seen.has(item.slug) || (item !== entry && slugs.has(item.slug))) throw new Error(`releaseTrain uses the slug ${item.slug} twice`)
+      seen.add(item.slug)
+      for (const key of item.keys ?? []) {
+        if (keys.has(key)) throw new Error(`releaseTrain uses the key ${key} twice`)
+        keys.add(key)
+      }
+    }
+  }
 }

@@ -53,7 +53,10 @@ from every configured repository. It:
 
 The snapshot contains `catalog` for repository discovery, `projects` for the
 detailed watchlist and `releaseTrain` for the release train view. When the build
-files cannot be read, the previous release train is kept.
+files cannot be read, a local run keeps the previous snapshot's release train. A
+CI run starts from a fresh checkout with no previous snapshot, so the view says it
+is unavailable until the next refresh. A `releaseTrain` configuration error fails
+the run.
 
 When API access is temporarily unavailable, existing projects keep their cached
 snapshot. A new project can use `scripts/public-github-preview.mjs` to create a
