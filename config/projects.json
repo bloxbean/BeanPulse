@@ -6,6 +6,20 @@
     ],
     "newRepositoryWindowDays": 30
   },
+  "areaAliases": {
+    "Blockfrost API": "bf-api",
+    "bf-api": "bf-api",
+    "Core API": "core-api",
+    "analytics store": "analytics-store",
+    "observability": "observability",
+    "governance": "governance",
+    "compiler": "compiler",
+    "wasm": "wasm",
+    "groth16": "groth16",
+    "plonk": "plonk",
+    "quicktx": "quicktx",
+    "koios": "koios"
+  },
   "projects": [
     {
       "slug": "yaci-store",
